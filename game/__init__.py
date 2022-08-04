@@ -31,7 +31,7 @@ BULLET_STOP_SPEED = 150
 FIRE_COOLDOWN = 8
 
 #player class
-#note to self: python's inheritance is have the child class take the parent class in as a parameter in the declaration
+#inherits from arcade.Sprite parent class
 class Player(arcade.Sprite):
 
     def __init__(self, image, scale):
@@ -179,7 +179,7 @@ class GameWindow(arcade.Window):
         self.physics_engine.add_collision_handler("bullet_sprite", "bullet_sprite", post_handler=bulletxbullet_hit_handler)
     
     #on update method
-    #runs the game
+    #runs the game and takes care of player input and physics
     def on_update(self, delta_time):
         """ Movement and game logic """
 
@@ -246,7 +246,8 @@ class GameWindow(arcade.Window):
 
 
     #draws the objects to the screen
-    #also applies any effects invoked such as the CRT filter
+    #for each frame, the shapes and objects will be drawn and then cleared
+    #also applies any visual effects invoked such as the CRT filter
     def on_draw(self):
         
         # Draw our stuff into the CRT filter
@@ -268,7 +269,7 @@ class GameWindow(arcade.Window):
         self.crt_filter.draw()
 
     #method invoked when mouse is moved
-    #points the spaceship in a particular direction
+    #points the spaceship in the direction of the mouse cursor
     def on_mouse_motion(self, x, y, delta_x, delta_y):
         """Called whenever the mouse moves. """
         self.mouse_raw_x = x
