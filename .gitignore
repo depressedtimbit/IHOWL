@@ -4,3 +4,4 @@ test3
 virt/*
 *.build
 *.dist
+*__pycache__*
