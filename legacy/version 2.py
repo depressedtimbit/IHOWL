@@ -4,7 +4,7 @@ from typing import Optional
 import arcade
 from arcade.pymunk_physics_engine import PymunkPhysicsEngine
 from arcade.experimental.crt_filter import CRTFilter
-from arcade.math import Vec2
+from pyglet.math import Vec2
 
 SCREEN_TITLE = "IHOWL"
 
@@ -80,7 +80,7 @@ class Bullet(arcade.SpriteSolidColor):
         force = (BULLET_FORCE , 0 )
         gamewin.physics_engine.apply_force(bullet_object, force)
         bullet_object.sound.play()
-    
+"""
 class CargoShip_front(arcade.Sprite):
 
     def __init__(self, image, scale):
@@ -98,7 +98,7 @@ class CargoShip_back(arcade.Sprite):
     def __init__(self, image, scale):
 
         super().__init__(image,scale)
-
+"""
 class GameWindow(arcade.Window):
 
     def __init__(self, width, height, title):
@@ -149,7 +149,7 @@ class GameWindow(arcade.Window):
         # Set up the pointer 
         self.pointer_sprite = Pointer("images/pointer.png", GUI_SCALING)
         self.pointer_list.append(self.pointer_sprite)
-
+        """
         self.cargo_front = CargoShip_front("images/cargo01.png", SPRITE_SCALING)
         self.ships_list.append(self.cargo_front)
         self.cargo_front.position = [144, 0]
@@ -159,7 +159,7 @@ class GameWindow(arcade.Window):
         self.cargo_back = CargoShip_back("images/cargo03.png", SPRITE_SCALING)
         self.cargo_back.position = [26, 0]
         self.ships_list.append(self.cargo_back)
-
+        """
         # Set up bullets
         """ Find a way to make bullets not collide instead of doing this """
         def bulletxbullet_hit_handler(bullet_sprite, bullet_sprite_2, _arbiter, _space, _data):
