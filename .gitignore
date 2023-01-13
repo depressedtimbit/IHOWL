@@ -4,5 +4,7 @@ test3
 virt/*
 *.build
 *.dist
+*.onefile-build
 *__pycache__*
 .vscode/*
+*.exe
