@@ -107,9 +107,6 @@ class GameWindow(arcade.Window):
         # Update pointer
         self.pointer_sprite.update((self.mouse_raw_x, self.mouse_raw_y), (self.player_sprite.center_x, self.player_sprite.center_y), self.camera)
         self.mini_pointer.update_mini(self.player_sprite.position, self.player_sprite.physics_object.body.angle, self.player_sprite.distance_to_target)
-
-        
-        
     
         # Apply acceleration
         if self.thrust_pressed:
@@ -118,25 +115,23 @@ class GameWindow(arcade.Window):
             thrust_amout = math.log(thrust_amout)
             self.player_sprite.thrust(PLAYER_MOVE_FORCE*thrust_amout)
 
-
-        
         self.scene.on_update(delta_time, ["bullet_list", "Ai_list", "player_list"])
-        
 
-        
+
         if self.fire_pressed:
             self.player_sprite.fire_guns()
             
         for sprite in self.scene.name_mapping['Ai_list']:
             sprite:entitys.ship
-            if sprite.distance_to_target <= 20:
+            if sprite.distance_to_target <= 20: #check if the Ai ship is within 20 units of its old target
                 player_x = self.player_sprite.center_x
                 player_y = self.player_sprite.center_y
 
+                #make a new target based thats within 500 units of the players pos 
                 target = (random.uniform(player_x - 500, player_x + 500),
                                random.uniform(player_y - 500, player_y + 500))
                 sprite.change_target(target)
-            if abs(sprite.pid_output) <= 10:
+            if abs(sprite.pid_output) <= 10: # if the Ai ship is not correcting its rotation by a large amount, apply thrust
                 sprite.thrust(CARGO_MOVE_FORCE)
 
         # Step the engine 

@@ -60,6 +60,8 @@ class ship(arcade.Sprite):
 
     def on_update(self, delta_time: float = 1 / 60):
         self.lastfire -= delta_time
+
+        #get distance to target and target angle
         if self.target is not None: 
             self.distance_to_target = arcade.get_distance_between_sprites(self, self.target)
             self.target_angle  = utilities.get_angle_to(self.position, self.target.position) % (2 * math.pi)
@@ -67,6 +69,7 @@ class ship(arcade.Sprite):
             self.distance_to_target = arcade.get_distance(self.position[0], self.position[1], self.targetcoord[0], self.targetcoord[1])
             self.target_angle  = utilities.get_angle_to(self.position, self.targetcoord) % (2 * math.pi)
 
+        #~~~ PID control code
         self.bodyangle = self.physics_object.body.angle % (2 * math.pi)
         error = self.bodyangle - self.target_angle 
         
@@ -77,23 +80,23 @@ class ship(arcade.Sprite):
                 self.target_angle = self.target_angle + 2*math.pi
         
         self.pid_output = utilities.pid(self.bodyangle, self.target_angle, delta_time, self.pid_params, self.pid_data)
-        
+        #~~~
 
+
+        #rotate the ship by applying trust in 2 oppsite and offset points 
         self.physics_object.body.apply_force_at_local_point((0, -self.pid_output), (2, 0))
         self.physics_object.body.apply_force_at_local_point((0, self.pid_output), (-2, 0))
         return super().on_update(delta_time)
 
     def thrust(self, force:float):
-        self.physics_object.body.apply_impulse_at_local_point((force, 0), (1, 0))
+        self.physics_object.body.apply_impulse_at_local_point((force, 0), (1, 0)) 
 
     def fire_guns(self):
         gun = next(self.guncycle)
-        print(self.lastfire)
         
         if self.lastfire <= 0:
-                print("fire2")
                 gun.fire()
-                self.lastfire = PLAYER_GUN_COOLDOWN / len(self.gunlist)
+                self.lastfire = PLAYER_GUN_COOLDOWN / len(self.gunlist) #devide the cooldown by the amount of guns attached to the ship, as each gun fires one at a time 
             
     def change_target(self, new_target):
         if type(new_target) == arcade.Sprite:
@@ -180,7 +183,7 @@ class Pointer(arcade.Sprite):
         
 
 
-    
+"""~~~~~~~~Old stuff, use for reference~~~~~~~~"""
 
 class CargoShip_gun(arcade.Sprite):
     def __init__(self, image:str, scale:int, scene:arcade.scene, parent:arcade.sprite):
@@ -192,7 +195,6 @@ class CargoShip_gun(arcade.Sprite):
     def update_child(self, parent:arcade.sprite ,delta_time: float = 1 / 60):
         self.position = parent.position 
     
-
 
 class CargoShip_base(arcade.Sprite):
 
