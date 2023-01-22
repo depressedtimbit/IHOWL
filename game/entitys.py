@@ -2,30 +2,51 @@ from typing_extensions import Self
 import arcade
 import math
 import random
-from . import constants, utilities
+from . import utilities
 from arcade.pymunk_physics_engine import PymunkPhysicsEngine
-
-
-
-GameMasterSettings = constants.GameMasterSettings
+from game.constants import *
+from itertools import cycle
 
 #player class
 #inherits from arcade.Sprite parent class
-class Player(arcade.Sprite):
+class ship(arcade.Sprite):
 
-    def __init__(self, image, scale, scene:arcade.scene, physicsEngine:PymunkPhysicsEngine):
+    def __init__(self, 
+                    image, 
+                    scale, 
+                    scene:arcade.scene, 
+                    physicsEngine:PymunkPhysicsEngine, 
+                    list:str, 
+                    collision_type:str, 
+                    max_vel, 
+                    mass, 
+                    moment, 
+                    target:arcade.Sprite = None, 
+                    targetcoord:list = None):
         
         super().__init__(image, scale, flipped_diagonally=True, flipped_horizontally =True)
-        scene.add_sprite("player_list", self)
-        physicsEngine.add_sprite(self,
-                                       collision_type="player",
-                                       moment=20.0,
-                                       max_velocity=GameMasterSettings["PLAYER_MAX_SPEED"])
+        self.physics_engine = physicsEngine
+        self.scene = scene
+        self.target = target
+        self.targetcoord = targetcoord
+        self.distance_to_target = 0
+        self.scene.add_sprite(list, self)
+        self.physics_engine.add_sprite(self,
+                                       collision_type=collision_type,
+                                       moment=moment,
+                                       mass=mass,
+                                       max_velocity=max_vel)
         self.physics_object = physicsEngine.get_physics_object(self)
         self.speed = 0
         self.player_force = [0, 0]
         self.target_angle = 0
         self.bodyangle = 0 
+        self.gunlist = [
+            Gun("assets/images/ship_gun.png", scale, self)
+            ]
+        
+        self.guncycle = cycle(self.gunlist)
+        self.lastfire = 0
         self.pid_params = {
             "p":100,
             "i":10,
@@ -35,10 +56,18 @@ class Player(arcade.Sprite):
             "errSum":0,
             "lasterr":0
         }
+        self.pid_output = 0
 
-    def on_update(self, pointer:arcade.sprite, delta_time: float = 1 / 60):
+    def on_update(self, delta_time: float = 1 / 60):
+        self.lastfire -= delta_time
+        if self.target is not None: 
+            self.distance_to_target = arcade.get_distance_between_sprites(self, self.target)
+            self.target_angle  = utilities.get_angle_to(self.position, self.target.position) % (2 * math.pi)
+        elif self.targetcoord is not None:
+            self.distance_to_target = arcade.get_distance(self.position[0], self.position[1], self.targetcoord[0], self.targetcoord[1])
+            self.target_angle  = utilities.get_angle_to(self.position, self.targetcoord) % (2 * math.pi)
+
         self.bodyangle = self.physics_object.body.angle % (2 * math.pi)
-        self.target_angle  = utilities.get_angle_to(self.position, pointer.position) % (2 * math.pi)
         error = self.bodyangle - self.target_angle 
         
         if abs(error) > math.pi:
@@ -47,18 +76,89 @@ class Player(arcade.Sprite):
             elif self.bodyangle > self.target_angle:
                 self.target_angle = self.target_angle + 2*math.pi
         
-        pid_output = utilities.pid(self.bodyangle, self.target_angle, delta_time, self.pid_params, self.pid_data)
+        self.pid_output = utilities.pid(self.bodyangle, self.target_angle, delta_time, self.pid_params, self.pid_data)
         
 
-        self.physics_object.body.apply_force_at_local_point((0, -pid_output), (2, 0))
-        self.physics_object.body.apply_force_at_local_point((0, pid_output), (-2, 0))
+        self.physics_object.body.apply_force_at_local_point((0, -self.pid_output), (2, 0))
+        self.physics_object.body.apply_force_at_local_point((0, self.pid_output), (-2, 0))
         return super().on_update(delta_time)
 
     def thrust(self, force:float):
-        self.physics_object.body.apply_force_at_local_point((force, 0), (1, 0))
+        self.physics_object.body.apply_impulse_at_local_point((force, 0), (1, 0))
+
+    def fire_guns(self):
+        gun = next(self.guncycle)
+        print(self.lastfire)
         
+        if self.lastfire <= 0:
+                print("fire2")
+                gun.fire()
+                self.lastfire = PLAYER_GUN_COOLDOWN / len(self.gunlist)
+            
+    def change_target(self, new_target):
+        if type(new_target) == arcade.Sprite:
+            self.target = new_target
+            self.targetcoord = None
+        else:
+            self.targetcoord = new_target
+            self.target = None
 
 
+
+class Gun(arcade.Sprite):
+    def __init__(self, image, scale, parent):
+
+        super().__init__(image, scale)
+        self.parent = parent
+        self.bullet = Bullet
+    def fire(self):
+        self.bullet(20, 5, arcade.color.WHITE_SMOKE, self.parent)
+        
+#bullet class
+class Bullet(arcade.SpriteSolidColor):
+    
+    def __init__(self, width, height, color, parent:ship):
+        """ Set up the player """
+
+        # Call the parent init
+        super().__init__(width, height, color)
+
+        self.sound = arcade.Sound("assets/sfx/ship_fire_light.mp3")
+        self.health:int = 50
+
+        self.parent = parent
+        self.parent.scene.add_sprite("bullet_list", self)
+        self.position = parent.position
+
+        self.size = max(parent.width, parent.height) / 2
+
+        self.center_x += self.size * math.cos(parent.bodyangle) 
+        self.center_y += self.size * math.sin(parent.bodyangle)
+
+        self.angle = math.degrees(parent.bodyangle)
+
+        parent.physics_engine.add_sprite(self,
+            mass=BULLET_MASS,
+            moment=PymunkPhysicsEngine.MOMENT_INF,
+            damping=0.5,
+            collision_type="bullet",
+            )
+        bullet_physcis_object = parent.physics_engine.get_physics_object(self)
+        bullet_physcis_object.body.velocity = parent.physics_object.body.velocity
+        force = (BULLET_FORCE, 0 )
+        parent.physics_engine.apply_force(self, force)
+        self.sound.play()
+
+    def on_update(self, delta_time: float = 1 / 60):
+        self.health -= delta_time * 25
+        if self.health <= 0:
+            self.kill()
+        return super().on_update(delta_time)
+
+    def damage(self, amount:int, instant:bool = False):
+        if instant:
+            self.health = -999
+        else: self.health -= amount
 
 #pointer class
 class Pointer(arcade.Sprite):
@@ -79,45 +179,6 @@ class Pointer(arcade.Sprite):
         self.center_y = playerpos[1]+playerdistence*math.sin(playerangle)
         
 
-#bullet class
-class Bullet(arcade.SpriteSolidColor):
-    
-    def __init__(self, width, height, color):
-        """ Set up the player """
-
-        # Call the parent init
-        super().__init__(width, height, color)
-
-        self.sound = arcade.Sound("assets/sfx/ship_fire_light.mp3")
-        self.health:int = 50
-
-    def fire(self, physics_engine:PymunkPhysicsEngine, bullet_object:Self, parent_object:arcade.sprite, fire_angle):
-        bullet_object.position = parent_object.position
-
-        bullet_object.size = max(parent_object.width, parent_object.height) / 2
-
-        bullet_object.center_x += bullet_object.size * math.cos(fire_angle) 
-        bullet_object.center_y += bullet_object.size * math.sin(fire_angle)
-
-        bullet_object.angle = math.degrees(fire_angle)
-
-        physics_engine.add_sprite(bullet_object,
-            mass=GameMasterSettings["BULLET_MASS"],
-            moment=PymunkPhysicsEngine.MOMENT_INF,
-            damping=0.5,
-            collision_type="bullet",
-            )
-        bullet_physcis_object = physics_engine.get_physics_object(bullet_object)
-        bullet_physcis_object.body.velocity = parent_object.physics_object.body.velocity
-        force = (GameMasterSettings["BULLET_FORCE"] , 0 )
-        physics_engine.apply_force(bullet_object, force)
-        bullet_object.sound.play()
-
-    def on_update(self, delta_time: float = 1 / 60):
-        self.health -= delta_time * 25
-        if self.health <= 0:
-            self.kill()
-        return super().on_update(delta_time)
 
     
 
@@ -142,9 +203,9 @@ class CargoShip_base(arcade.Sprite):
         scene.add_sprite("Ai_list", self)
         physicsEngine.add_sprite(self,
                                        collision_type="cargoship",
-                                       mass=GameMasterSettings["CARGO_MASS"],
+                                       mass=CARGO_MASS,
                                        moment=100.0,
-                                       max_velocity=GameMasterSettings["CARGO_MAX_SPEED"])
+                                       max_velocity=CARGO_MAX_SPEED)
         self.physics_object = physicsEngine.get_physics_object(self)
         self.childgun = CargoShip_gun(image="assets\images\cargo_gun.png", scale=scale, scene=scene, parent=self)
         self.health:int = 100
@@ -157,6 +218,7 @@ class CargoShip_base(arcade.Sprite):
         if instant:
             self.health = -999
         else: self.health -= amount
+
     def on_update(self, target:arcade.sprite, delta_time: float = 1 / 60):
         #health check
         if self.health <= 0:
@@ -186,8 +248,8 @@ class CargoShip_base(arcade.Sprite):
         
         #self.physics_object.body.angle = self.angle
         force = [math.cos(self.angle), math.sin(self.angle)]
-        force[0] *= GameMasterSettings["CARGO_MOVE_FORCE"]
-        force[1] *= GameMasterSettings["CARGO_MOVE_FORCE"]
+        force[0] *= CARGO_MOVE_FORCE
+        force[1] *= CARGO_MOVE_FORCE
         #self.trust(self.physics_engines[0], self.force)
         self.childgun.update_child(self, delta_time)
         return super().on_update(delta_time)

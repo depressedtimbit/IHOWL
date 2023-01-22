@@ -26,4 +26,12 @@ def pid(input,
         data["lasterr"] = error
         return -(params["p"] * error + params["i"] * data["errSum"] + params["d"] * derr)
 
-        pass
+        
+
+def cycle(list):
+        """more memory efficient cycle"""
+        while list:
+                for element in list:
+                        yield element
+
+                        

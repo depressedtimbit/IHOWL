@@ -3,9 +3,9 @@ import arcade
 from typing import Optional
 from arcade.experimental.crt_filter import CRTFilter
 from arcade.pymunk_physics_engine import PymunkPhysicsEngine
-
-from game.constants import GameMasterSettings
-from . import entitys, constants, utilities
+from . import entitys
+from game.constants import *
+import random
 
 SCREEN_TITLE = "IHOWL"
 
@@ -16,7 +16,7 @@ SPRITE_SCALING = 1
 GUI_SCALING = 0.5
 IMAGE_ROTATION = -90
 
-GameMasterSettings = constants.GameMasterSettings
+
 
 
 
@@ -60,8 +60,8 @@ class GameWindow(arcade.Window):
         #self.background = arcade.load_texture("assets/images/background.png")
          
 
-        self.physics_engine = PymunkPhysicsEngine(damping=GameMasterSettings["DEFAULT_DAMPING"],
-                                                  gravity=GameMasterSettings["GRAVITY"])
+        self.physics_engine = PymunkPhysicsEngine(damping=DEFAULT_DAMPING,
+                                                  gravity=GRAVITY)
 
 
         self.scene = arcade.Scene()
@@ -72,25 +72,27 @@ class GameWindow(arcade.Window):
         self.scene.add_sprite_list("bullet_list")
         self.scene.add_sprite_list("Ai_list")
 
-        # Set up the player
-        self.player_sprite = entitys.Player("assets/images/ship.png", SPRITE_SCALING, scene=self.scene, physicsEngine=self.physics_engine)
 
-        # debug cargo ship
-        #self.cargodebug = entitys.CargoShip_base("assets/images/cargo_base.png",  SPRITE_SCALING, scene=self.scene, physicsEngine=self.physics_engine)
         
         # Set up the pointer 
         self.pointer_sprite = entitys.Pointer("assets/images/pointer.png", GUI_SCALING)
         self.mini_pointer = entitys.Pointer("assets/images/minipointer.png", GUI_SCALING)
-
+        
         self.scene.add_sprite("pointer_list", self.pointer_sprite)
         self.scene.add_sprite("pointer_list", self.mini_pointer)
+        
+        # Set up the player
+        self.player_sprite = entitys.ship("assets/images/ship.png", SPRITE_SCALING, scene=self.scene, physicsEngine=self.physics_engine, max_vel=PLAYER_MAX_SPEED, mass=PLAYER_MASS,moment=PLAYER_MOMENT, list="player_list", collision_type="player", target=self.pointer_sprite)
+        self.player_sprite.physics_object.body._set_position((500, 0))
+        # debug cargo ship
+        self.cargodebug = entitys.ship("assets/images/cargo_base.png",  SPRITE_SCALING, scene=self.scene, physicsEngine=self.physics_engine, max_vel=CARGO_MAX_SPEED, mass=CARGO_MASS,moment=CARGO_MOMENT, list="Ai_list", collision_type="cargoship", targetcoord=(0, 0))
 
         # Set up bullets
         """ Find a way to make bullets not collide instead of doing this """
-        def bulletxbullet_hit_handler(bullet_sprite, bullet_sprite_2, _arbiter, _space, _data):
+        def bulletxplayerbullet_hit_handler(bullet_sprite, bullet_sprite_2, _arbiter, _space, _data):
                 bullet_sprite.kill()
                 bullet_sprite_2.kill()
-        self.physics_engine.add_collision_handler("bullet", "bullet", post_handler=bulletxbullet_hit_handler)
+        self.physics_engine.add_collision_handler("bullet", "playerbullet", post_handler=bulletxplayerbullet_hit_handler)
         # Set up Cargoships 
         def bulletxcargo_hit_handler(bullet_sprite:entitys.Bullet, cargo_sprite:entitys.CargoShip_base, _arbiter, _space, _data):
             cargo_sprite.damage(bullet_sprite.health) 
@@ -104,37 +106,38 @@ class GameWindow(arcade.Window):
 
         # Update pointer
         self.pointer_sprite.update((self.mouse_raw_x, self.mouse_raw_y), (self.player_sprite.center_x, self.player_sprite.center_y), self.camera)
-        self.mini_pointer.update_mini(self.player_sprite.position, self.player_sprite.physics_object.body.angle, arcade.get_distance_between_sprites(self.player_sprite, self.pointer_sprite))
+        self.mini_pointer.update_mini(self.player_sprite.position, self.player_sprite.physics_object.body.angle, self.player_sprite.distance_to_target)
 
-        self.player_sprite.on_update(self.pointer_sprite, delta_time)
         
-        #self.player_sprite.physics_object.body.angle = angle
         
-
+    
         # Apply acceleration
         if self.thrust_pressed:
-            thrust_amout = arcade.get_distance_between_sprites(self.player_sprite, self.pointer_sprite)
+            thrust_amout = self.player_sprite.distance_to_target
             print(thrust_amout)
             thrust_amout = math.log(thrust_amout)
-            self.player_sprite.thrust(GameMasterSettings["PLAYER_MOVE_FORCE"]*thrust_amout)
+            self.player_sprite.thrust(PLAYER_MOVE_FORCE*thrust_amout)
 
-        if self.time_since_last_fire > 0:
-            self.time_since_last_fire -= 1
 
         
-        self.scene.on_update(delta_time, ["bullet_list"])
+        self.scene.on_update(delta_time, ["bullet_list", "Ai_list", "player_list"])
+        
+
+        
+        if self.fire_pressed:
+            self.player_sprite.fire_guns()
+            
         for sprite in self.scene.name_mapping['Ai_list']:
-            if type(sprite) == entitys.CargoShip_base:
-                sprite.on_update(self.player_sprite, delta_time)
+            sprite:entitys.ship
+            if sprite.distance_to_target <= 20:
+                player_x = self.player_sprite.center_x
+                player_y = self.player_sprite.center_y
 
-        
-        if self.fire_pressed and self.time_since_last_fire <= 0:
-            bullet_sprite = entitys.Bullet(20, 3, arcade.color.WHITE_SMOKE)
-            self.scene.add_sprite("bullet_list", bullet_sprite)
-            #bullet_sprite.fire(self.physics_engine, bullet_sprite, self.player_sprite, angle)
-            self.time_since_last_fire += GameMasterSettings["FIRE_COOLDOWN"]
-                
-        
+                target = (random.uniform(player_x - 500, player_x + 500),
+                               random.uniform(player_y - 500, player_y + 500))
+                sprite.change_target(target)
+            if abs(sprite.pid_output) <= 10:
+                sprite.thrust(CARGO_MOVE_FORCE)
 
         # Step the engine 
         self.physics_engine.step()
@@ -179,19 +182,18 @@ class GameWindow(arcade.Window):
         self.crt_filter.draw()
 
         if self.debug:
-            arcade.draw_text(arcade.get_distance(self.player_sprite.center_x, self.player_sprite.center_y, 0, 0), self.pointer_sprite.center_x, self.pointer_sprite.center_y - 50, arcade.color.RED)
-            
-            #arcade.draw_text(f"x {self.pointer_sprite.center_x}", self.pointer_sprite.center_x, self.pointer_sprite.center_y - 100, arcade.color.RED)
-            #arcade.draw_text(f"y {self.pointer_sprite.center_y}", self.pointer_sprite.center_x, self.pointer_sprite.center_y - 150, arcade.color.RED)
-
-            pangle = self.player_sprite.physics_object.body.angle
-            tangle = self.player_sprite.target_angle
-            arcade.draw_text(round(pangle, 4), self.pointer_sprite.center_x, self.pointer_sprite.center_y - 100, arcade.color.RED)
-            arcade.draw_text(round(tangle, 4), self.pointer_sprite.center_x, self.pointer_sprite.center_y - 150, arcade.color.RED)
-            arcade.draw_line(self.player_sprite.center_x, self.player_sprite.center_y, self.player_sprite.center_x+50*math.cos(pangle), self.player_sprite.center_y+50*math.sin(pangle), arcade.color.RED)
-            arcade.draw_line(self.player_sprite.center_x, self.player_sprite.center_y, self.player_sprite.center_x+200*math.cos(tangle), self.player_sprite.center_y+200*math.sin(tangle), arcade.color.RED)
-            arcade.draw_line(self.player_sprite.center_x, self.player_sprite.center_y, self.player_sprite.center_x+200*math.cos(math.pi), self.player_sprite.center_y+200*math.sin(math.pi), arcade.color.RED)
-            arcade.draw_text(arcade.get_fps(), self.pointer_sprite.center_x, self.pointer_sprite.center_y + 50, arcade.color.RED)
+           arcade.draw_text(arcade.get_distance(self.player_sprite.center_x, self.player_sprite.center_y, 0, 0), self.pointer_sprite.center_x, self.pointer_sprite.center_y - 50, arcade.color.RED)
+           #arcade.draw_text(self.player_sprite.pid_output, self.pointer_sprite.center_x, self.pointer_sprite.center_y - 50, arcade.color.RED)
+           #arcade.draw_text(f"x {self.pointer_sprite.center_x}", self.pointer_sprite.center_x, self.pointer_sprite.center_y - 100, arcade.color.RED)
+           #arcade.draw_text(f"y {self.pointer_sprite.center_y}", self.pointer_sprite.center_x, self.pointer_sprite.center_y - 150, arcade.color.RED)
+           pangle = self.player_sprite.physics_object.body.angle
+           tangle = self.player_sprite.target_angle
+           arcade.draw_text(round(pangle, 4), self.pointer_sprite.center_x, self.pointer_sprite.center_y - 100, arcade.color.RED)
+           arcade.draw_text(round(tangle, 4), self.pointer_sprite.center_x, self.pointer_sprite.center_y - 150, arcade.color.RED)
+           arcade.draw_line(self.player_sprite.center_x, self.player_sprite.center_y, self.player_sprite.center_x+50*math.cos(pangle), self.player_sprite.center_y+50*math.sin(pangle), arcade.color.RED)
+           arcade.draw_line(self.player_sprite.center_x, self.player_sprite.center_y, self.player_sprite.center_x+200*math.cos(tangle), self.player_sprite.center_y+200*math.sin(tangle), arcade.color.RED)
+           arcade.draw_line(self.player_sprite.center_x, self.player_sprite.center_y, self.player_sprite.center_x+200*math.cos(math.pi), self.player_sprite.center_y+200*math.sin(math.pi), arcade.color.RED)
+           arcade.draw_text(arcade.get_fps(), self.pointer_sprite.center_x, self.pointer_sprite.center_y + 50, arcade.color.RED)
 
     #method invoked when mouse is moved
     #points the spaceship in the direction of the mouse cursor
@@ -224,9 +226,11 @@ class GameWindow(arcade.Window):
 
     def on_key_press(self, symbol: int, modifiers: int):
         if symbol == 65470:
-            if self.debug:
-                arcade.disable_timings()    
+            print(self.debug)
+            if self.debug:   
                 self.debug = False
+                arcade.clear_timings()
+                arcade.disable_timings()
             else:
                 arcade.enable_timings()
                 self.debug = True
