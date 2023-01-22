@@ -21,6 +21,7 @@ class ship(arcade.Sprite):
                     max_vel, 
                     mass, 
                     moment, 
+                    cooldown, 
                     target:arcade.Sprite = None, 
                     targetcoord:list = None):
         
@@ -30,6 +31,7 @@ class ship(arcade.Sprite):
         self.target = target
         self.targetcoord = targetcoord
         self.distance_to_target = 0
+        self.cooldown = cooldown
         self.scene.add_sprite(list, self)
         self.physics_engine.add_sprite(self,
                                        collision_type=collision_type,
