@@ -82,10 +82,10 @@ class GameWindow(arcade.Window):
         self.scene.add_sprite("pointer_list", self.mini_pointer)
         
         # Set up the player
-        self.player_sprite = entitys.ship("assets/images/ship.png", SPRITE_SCALING, scene=self.scene, physicsEngine=self.physics_engine, max_vel=PLAYER_MAX_SPEED, mass=PLAYER_MASS,moment=PLAYER_MOMENT, list="player_list", collision_type="player", target=self.pointer_sprite)
+        self.player_sprite = entitys.ship("assets/images/ship.png", SPRITE_SCALING, scene=self.scene, physicsEngine=self.physics_engine, max_vel=PLAYER_MAX_SPEED, mass=PLAYER_MASS,moment=PLAYER_MOMENT, cooldown=PLAYER_GUN_COOLDOWN, list="player_list", collision_type="player", target=self.pointer_sprite)
         self.player_sprite.physics_object.body._set_position((500, 0))
         # debug cargo ship
-        self.cargodebug = entitys.ship("assets/images/cargo_base.png",  SPRITE_SCALING, scene=self.scene, physicsEngine=self.physics_engine, max_vel=CARGO_MAX_SPEED, mass=CARGO_MASS,moment=CARGO_MOMENT, list="Ai_list", collision_type="cargoship", targetcoord=(0, 0))
+        self.cargodebug = entitys.ship("assets/images/cargo_base.png",  SPRITE_SCALING, scene=self.scene, physicsEngine=self.physics_engine, max_vel=CARGO_MAX_SPEED, mass=CARGO_MASS,moment=CARGO_MOMENT, cooldown=CARGO_GUN_COOLDOWN, list="Ai_list", collision_type="cargoship", targetcoord=(0, 0))
 
         # Set up bullets
         """ Find a way to make bullets not collide instead of doing this """
