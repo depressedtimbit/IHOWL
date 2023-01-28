@@ -109,6 +109,18 @@ class ship(arcade.Sprite):
             self.target = None
 
 
+    def damage(self, amount:int, instant:bool = False):
+        if instant:
+            self.health = -999
+        else: self.health -= amount
+
+        #health check
+        if self.health <= 0:
+            for gun in self.gunlist:
+                print("killed sprite", id(gun))
+                gun.kill()
+            self.kill()
+            print("killed sprite", id(self))
 
 class Gun(arcade.Sprite):
     def __init__(self, image, scale, parent):
