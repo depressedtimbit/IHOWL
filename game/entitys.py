@@ -1,11 +1,89 @@
+import random
+import time
 from typing_extensions import Self
 import arcade
+import arcade.gl
 import math
-import random
+from array import array
+from dataclasses import dataclass
 from . import utilities
 from arcade.pymunk_physics_engine import PymunkPhysicsEngine
 from game.constants import *
 from itertools import cycle
+
+@dataclass
+class ParticleBurst:
+    buffer: arcade.gl.Buffer
+    vao: arcade.gl.Geometry
+    start_time: float
+
+class ParticleManager:
+    def __init__(self, ctx, burst_list, width, height, camera:arcade.Camera) -> None:
+        self.ctx = ctx
+        self.burst_list = burst_list
+        self.width = width
+        self.height = height
+        self.camera = camera
+
+    def partical_burst(self, x: float, y:float, angle:float):
+        def _gen_initial_data(initial_x, initial_y, angle):
+                    for i in range(PARTICLE_COUNT):
+                        angle = random.uniform(angle-0.05, angle+0.05)
+                        speed = abs(random.gauss(0, 1)) * .2
+                        colordiff = random.uniform(0.6, 0.8)
+                        dx = -math.cos(angle) * speed
+                        dy = -math.sin(angle) * speed
+                        red = colordiff
+                        green = colordiff
+                        blue = colordiff
+                        fade_rate = random.uniform(1 / MAX_FADE_TIME, 1 / MIN_FADE_TIME)
+
+                        yield initial_x
+                        yield initial_y
+                        yield dx
+                        yield dy
+                        yield red
+                        yield green
+                        yield blue
+                        yield fade_rate
+        # Recalculate the coordinates from pixels to the OpenGL system with
+        # 0, 0 at the center.
+
+        x -= self.camera.position[0]
+        y -= self.camera.position[1]
+        x2 = x  / self.width * 2. - 1.
+        y2 = y  / self.height * 2. - 1.
+        
+
+        # Get initial particle data
+        initial_data = _gen_initial_data(x2, y2, angle)
+
+        # Create a buffer with that data
+        buffer = self.ctx.buffer(data=array('f', initial_data))
+
+        # Create a buffer description that says how the buffer data is formatted.
+        buffer_description = arcade.gl.BufferDescription(buffer,
+                                                         '2f 2f 3f f',
+                                                         ['in_pos',
+                                                          'in_vel',
+                                                          'in_color',
+                                                          'in_fade_rate'])
+        # Create our Vertex Attribute Object
+        vao = self.ctx.geometry([buffer_description])
+
+        # Create the Burst object and add it to the list of bursts
+        burst = ParticleBurst(buffer=buffer, vao=vao, start_time=time.time())
+        self.burst_list.append(burst)
+        #print(len(self.burst_list))
+
+    def on_update(self):
+        # Create a copy of our list, as we can't modify a list while iterating
+        # it. Then see if any of the items have completely faded out and need
+        # to be removed.
+        temp_list = self.burst_list.copy()
+        for burst in temp_list:
+            if time.time() - burst.start_time > MAX_FADE_TIME:
+               self.burst_list.remove(burst)
 
 #player class
 #inherits from arcade.Sprite parent class
@@ -22,6 +100,8 @@ class ship(arcade.Sprite):
                     mass, 
                     moment, 
                     cooldown, 
+                    partical_manager:ParticleManager,
+                    health:int = 100,
                     target:arcade.Sprite = None, 
                     targetcoord:list = None):
         
@@ -32,6 +112,8 @@ class ship(arcade.Sprite):
         self.targetcoord = targetcoord
         self.distance_to_target = 0
         self.cooldown = cooldown
+        self.partical_manager = partical_manager
+        self.health = health
         self.scene.add_sprite(list, self)
         self.physics_engine.add_sprite(self,
                                        collision_type=collision_type,
@@ -92,6 +174,8 @@ class ship(arcade.Sprite):
 
     def thrust(self, force:float):
         self.physics_object.body.apply_impulse_at_local_point((force, 0), (1, 0)) 
+        self.partical_manager.partical_burst(self.physics_object.body.position[0], self.physics_object.body.position[1], self.physics_object.body.angle)
+        
 
     def fire_guns(self):
         gun = next(self.guncycle)
@@ -107,7 +191,6 @@ class ship(arcade.Sprite):
         else:
             self.targetcoord = new_target
             self.target = None
-
 
     def damage(self, amount:int, instant:bool = False):
         if instant:
@@ -187,14 +270,13 @@ class Pointer(arcade.Sprite):
         super().__init__(image, scale)
 
     def update(self, mousepos, playerpos, camera:arcade.Camera):
-        self.center_x = mousepos[0] + playerpos[0] - (camera.viewport_width / 2)
-        self.center_y = mousepos[1] + playerpos[1] - (camera.viewport_height / 2)
+        self.center_x = mousepos[0] + camera.position[0]
+        self.center_y = mousepos[1] + camera.position[1] 
 
         return super().update()
     def update_mini(self, playerpos, playerangle, playerdistence):
         self.center_x = playerpos[0]+playerdistence*math.cos(playerangle)
         self.center_y = playerpos[1]+playerdistence*math.sin(playerangle)
-        
 
 
 """~~~~~~~~Old stuff, use for reference~~~~~~~~"""

@@ -1,4 +1,5 @@
 import math
+import time
 import arcade
 from typing import Optional
 from arcade.experimental.crt_filter import CRTFilter
@@ -22,17 +23,17 @@ IMAGE_ROTATION = -90
 
 
 #game window class
-class GameWindow(arcade.Window):
+class GameSection(arcade.Section):
 
     #constructor
     #this creates the window using the given dimensions
-    def __init__(self, width, height, title):
+    def __init__(self, left: int, bottom: int, width: int, height: int, **kwargs):
         
-        super().__init__(width, height, title)
+        super().__init__(left, bottom, width, height, **kwargs)
         # Track controls 
         self.mouse_raw_x = 0
         self.mouse_raw_y = 0
-        self.set_mouse_visible(False)
+        self.enabled = True
         self.thrust_pressed = False
         self.fire_pressed = False
         self.time_since_last_fire = 0
@@ -50,6 +51,13 @@ class GameWindow(arcade.Window):
                                     display_warp = (1.0 / 32.0, 1.0 / 24.0),
                                     mask_dark=0.5,
                                     mask_light=1.5)
+        self.burst_list = []
+        self.particlemanager = None
+        self.program = self.window.ctx.load_program(
+            vertex_shader="assets/shaders/vertex_shader_v1.glsl",
+            fragment_shader="assets/shaders/fragment_shader.glsl"
+        )
+        self.window.ctx.enable_only(self.window.ctx.BLEND)
     
     #setup method
     #loads the camera, physics and game assets before running the game
@@ -58,8 +66,9 @@ class GameWindow(arcade.Window):
         # cameras
         self.camera = arcade.Camera(self.width, self.height)
         #self.background = arcade.load_texture("assets/images/background.png")
-         
-
+        
+        
+        self.particlemanager = entitys.ParticleManager(self.window.ctx, self.burst_list, self.camera.viewport_width, self.camera.viewport_height, self.camera)
         self.physics_engine = PymunkPhysicsEngine(damping=DEFAULT_DAMPING,
                                                   gravity=GRAVITY)
 
@@ -72,7 +81,6 @@ class GameWindow(arcade.Window):
         self.scene.add_sprite_list("bullet_list")
         self.scene.add_sprite_list("Ai_list")
 
-
         
         # Set up the pointer 
         self.pointer_sprite = entitys.Pointer("assets/images/pointer.png", GUI_SCALING)
@@ -82,10 +90,10 @@ class GameWindow(arcade.Window):
         self.scene.add_sprite("pointer_list", self.mini_pointer)
         
         # Set up the player
-        self.player_sprite = entitys.ship("assets/images/ship.png", SPRITE_SCALING, scene=self.scene, physicsEngine=self.physics_engine, max_vel=PLAYER_MAX_SPEED, mass=PLAYER_MASS,moment=PLAYER_MOMENT, cooldown=PLAYER_GUN_COOLDOWN, list="player_list", collision_type="player", target=self.pointer_sprite)
+        self.player_sprite = entitys.ship("assets/images/ship.png", SPRITE_SCALING, scene=self.scene, physicsEngine=self.physics_engine, max_vel=PLAYER_MAX_SPEED, mass=PLAYER_MASS,moment=PLAYER_MOMENT, cooldown=PLAYER_GUN_COOLDOWN, partical_manager=self.particlemanager, list="player_list", collision_type="player", target=self.pointer_sprite)
         self.player_sprite.physics_object.body._set_position((500, 0))
         # debug cargo ship
-        self.cargodebug = entitys.ship("assets/images/cargo_base.png",  SPRITE_SCALING, scene=self.scene, physicsEngine=self.physics_engine, max_vel=CARGO_MAX_SPEED, mass=CARGO_MASS,moment=CARGO_MOMENT, cooldown=CARGO_GUN_COOLDOWN, list="Ai_list", collision_type="cargoship", targetcoord=(0, 0))
+        self.cargodebug = entitys.ship("assets/images/cargo_base.png",  SPRITE_SCALING, scene=self.scene, physicsEngine=self.physics_engine, max_vel=CARGO_MAX_SPEED, mass=CARGO_MASS,moment=CARGO_MOMENT, cooldown=CARGO_GUN_COOLDOWN, partical_manager=self.particlemanager, list="Ai_list", collision_type="cargoship", targetcoord=(0, 0))
 
         # Set up bullets
         """ Find a way to make bullets not collide instead of doing this """
@@ -111,12 +119,12 @@ class GameWindow(arcade.Window):
         # Apply acceleration
         if self.thrust_pressed:
             thrust_amout = self.player_sprite.distance_to_target
-            print(thrust_amout)
             thrust_amout = math.log(thrust_amout)
             self.player_sprite.thrust(PLAYER_MOVE_FORCE*thrust_amout)
 
         self.scene.on_update(delta_time, ["bullet_list", "Ai_list", "player_list"])
-
+        
+        self.particlemanager.on_update()
 
         if self.fire_pressed:
             self.player_sprite.fire_guns()
@@ -162,6 +170,9 @@ class GameWindow(arcade.Window):
         self.crt_filter.use()
         self.crt_filter.clear()
         self.camera.use()
+        for burst in self.burst_list:
+            self.program['time'] = time.time() - burst.start_time
+            burst.vao.render(self.program, mode=self.window.ctx.POINTS)
         self.scene.draw()
        #arcade.draw_lrwh_rectangle_textured(0, 0,
         #                                    SCREEN_WIDTH, SCREEN_HEIGHT,
@@ -171,10 +182,12 @@ class GameWindow(arcade.Window):
         arcade.draw_text("hold left click to Shoot", 10, 50, arcade.color.WHITE)
             # Switch back to our window and draw the CRT filter do
             # draw its stuff to the screen
-        self.use()
-        self.clear()
+        self.window.use()
+        self.window.clear()
 
         self.crt_filter.draw()
+
+        
 
         if self.debug:
            arcade.draw_text(arcade.get_distance(self.player_sprite.center_x, self.player_sprite.center_y, 0, 0), self.pointer_sprite.center_x, self.pointer_sprite.center_y - 50, arcade.color.RED)
@@ -231,16 +244,32 @@ class GameWindow(arcade.Window):
                 self.debug = True
         return super().on_key_press(symbol, modifiers)
 
-    
 
+class mainView(arcade.View):
+
+    def __init__(self, window):
+        super().__init__(window)
+        
+        self.frame = arcade.load_texture("assets/images/monitor frame.png")
+        self.section = GameSection(37, 28 , 717, 572, accept_keyboard_events=True)
+        self.section.setup()
+
+        self.section_manager.add_section(self.section)
+
+    def on_draw(self):
+        arcade.start_render()
+        self.section.on_draw()
+        
+        arcade.draw_lrwh_rectangle_textured(self.section.camera.position[0], self.section.camera.position[1], 800/(800/717), 600/(600/572), self.frame)
+        arcade.finish_render()
+
+        
 #main function, entry point
 def main():
     #initialise a game window
-    window = GameWindow(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
+    window = arcade.Window(resizable=False)
+    game = mainView(window)
     
-    #run the setup
-    window.setup()
+    window.show_view(game)
 
-    #runs the main loop
-    #always initialise the window, run the setup before invoking run()
-    arcade.run()
+    window.run()
