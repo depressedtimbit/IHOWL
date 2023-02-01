@@ -3,6 +3,7 @@ import time
 import arcade
 from typing import Optional
 from arcade.experimental.crt_filter import CRTFilter
+from arcade.gl import geometry
 from arcade.pymunk_physics_engine import PymunkPhysicsEngine
 from . import entitys
 from game.constants import *
@@ -54,8 +55,8 @@ class GameSection(arcade.Section):
         self.burst_list = []
         self.particlemanager = None
         self.program = self.window.ctx.load_program(
-            vertex_shader="assets/shaders/vertex_shader_v1.glsl",
-            fragment_shader="assets/shaders/fragment_shader.glsl"
+            vertex_shader="assets/shaders/particle/vertex_shader.glsl",
+            fragment_shader="assets/shaders/particle/fragment_shader.glsl"
         )
         self.window.ctx.enable_only(self.window.ctx.BLEND)
     
@@ -249,19 +250,37 @@ class mainView(arcade.View):
 
     def __init__(self, window):
         super().__init__(window)
-        
-        self.frame = arcade.load_texture("assets/images/monitor frame.png")
-        self.section = GameSection(37, 28 , 717, 572, accept_keyboard_events=True)
-        self.section.setup()
 
+        self.section = GameSection(37, 28 , 717, 572, accept_keyboard_events=True)
         self.section_manager.add_section(self.section)
+        self.section.setup()
+        
+        self.frame = self.window.ctx.load_texture("assets/images/monitor frame.png")
+        self.framenormal = self.window.ctx.load_texture("assets/images/monitor frame normal.png")
+        self.program = self.window.ctx.load_program(
+            vertex_shader="assets/shaders/normal/vertex_shader.glsl",
+            fragment_shader="assets/shaders/normal/fragment_shader.glsl"
+        )
+        
+        self.program["texture_diffuse"] = 1
+        self.program["texture_normal"] = 2
+        self.quad_fs = geometry.quad_2d_fs()
+        
+        
+        
+    
 
     def on_draw(self):
         arcade.start_render()
+        self.clear()
         self.section.on_draw()
+        self.frame.use(1)
+        self.framenormal.use(2)
+        self.quad_fs.render(self.program)
         
-        arcade.draw_lrwh_rectangle_textured(self.section.camera.position[0], self.section.camera.position[1], 800/(800/717), 600/(600/572), self.frame)
         arcade.finish_render()
+
+
 
         
 #main function, entry point
