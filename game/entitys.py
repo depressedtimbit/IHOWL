@@ -1,5 +1,6 @@
 import random
 import time
+from typing import Optional
 from typing_extensions import Self
 import arcade
 import arcade.gl
@@ -49,14 +50,16 @@ class ParticleManager:
         # Recalculate the coordinates from pixels to the OpenGL system with
         # 0, 0 at the center.
 
-        x -= self.camera.position[0]
-        y -= self.camera.position[1]
-        x2 = x  / self.width * 2. - 1.
-        y2 = y  / self.height * 2. - 1.
+        x #-= self.camera.position[0]
+        print(x)
+        y #-= self.camera.position[1]
+        print(y)
+        #y2 = y  - self.height/2.
+        #x2 = x  - self.width/2.
         
 
         # Get initial particle data
-        initial_data = _gen_initial_data(x2, y2, angle)
+        initial_data = _gen_initial_data(x, y, angle)
 
         # Create a buffer with that data
         buffer = self.ctx.buffer(data=array('f', initial_data))

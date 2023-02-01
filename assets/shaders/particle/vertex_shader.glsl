@@ -1,17 +1,19 @@
 #version 330
 
+uniform WindowBlock {
+    vec4 projection;
+    vec4 view;
+} window;
+
 // Time since burst start
 uniform float time;
 
 // (x, y) position passed in
 in vec2 in_pos;
-
 // Velocity of particle
 in vec2 in_vel;
-
 // Color of particle
 in vec3 in_color;
-
 // Fade rate
 in float in_fade_rate;
 
@@ -27,12 +29,11 @@ void main() {
     // Set the RGBA color
     color = vec4(in_color[0], in_color[1], in_color[2], alpha);
 
-    // Adjust velocity based on gravity
-    vec2 new_vel = in_vel;
 
     // Calculate a new position
-    vec2 new_pos = in_pos + (time * new_vel);
+    vec2 new_pos = in_pos + (time * in_vel);
+
 
     // Set the position. (x, y, z, w)
-    gl_Position = vec4(new_pos, 0.0, 1);
+    gl_Position = vec4(window.view * window.projection * vec4(new_pos, 0.0, 1.0));
 }
